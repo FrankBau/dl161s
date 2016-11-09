@@ -5,7 +5,7 @@
 #include <unistd.h>
 #include <usb.h>
 #include <time.h>
-
+#include <locale.h>
 
 #define VID 0x10c4 /* Cygnal Integrated Products, Inc. */
 #define PID 0xea61 /* Cygnal Integrated Products, Inc. CP210x UART Bridge */
@@ -273,7 +273,7 @@ int main (int argc, char **argv)
 	);
 	if (ret < 0)
 	{
-		printf("usb_control_msg request 2 failed with status %i: %s\n", ret, usb_strerror());
+		printf("usb_control_msg request 2 failed with http://beelogger.de/?page_id=50status %i: %s\n", ret, usb_strerror());
 		// return -1;	// yes, this might fail, ignore!
 	}
 
@@ -331,6 +331,14 @@ int main (int argc, char **argv)
 
 	sleep(5);
 
+#if 0
+	// locale support often not installed :-(
+	char *rc = setlocale (LC_ALL, "de_DE" );
+	if(rc==NULL) {
+		printf("failed to set locale\n");
+	}
+#endif
+
 	while(1) {
 
 		sleep(1);
@@ -367,8 +375,12 @@ int main (int argc, char **argv)
 		}
 
 		if(ret==2) {
-			int x = 256*(uint8_t)buf[1] + (uint8_t)buf[0]; 
-			printf("%8.1f dBA\n", x/10.0 );
+			int x = 256*(uint8_t)buf[1] + (uint8_t)buf[0]; // measurement value in 0.1 dbA
+			time_t curtime = time(NULL);
+			struct tm *loctime = localtime(&curtime);
+			char timebuf[80];
+			strftime(timebuf,sizeof timebuf,"%Y-%m-%d %H:%M:%S", loctime );
+			printf("%10ld; %s; %3d,%d\n", curtime, timebuf, x/10, x%10 );
 		} else {
 			printf("usb_bulk_read unexpectedly transferred %i bytes", ret);
 			print_buffer(buf,ret);
