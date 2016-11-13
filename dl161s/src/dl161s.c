@@ -27,14 +27,14 @@ struct usb_device *open_vid_pid(uint16_t vid, uint16_t pid)
 	ret = usb_find_busses();
 	if (ret < 0)
 	{
-		printf("usb_find_busses failed with status %i\n", ret);
+		fprintf(stderr,"usb_find_busses failed with status %i: %s\n", ret, usb_strerror());
 		return NULL;
 	}
 
 	ret = usb_find_devices();
 	if (ret < 0)
 	{
-		printf("usb_find_busses failed with status %i\n", ret);
+		fprintf(stderr,"usb_find_devices failed with status %i: %s\n", ret, usb_strerror());
 		return NULL;
 	}
 
@@ -58,7 +58,7 @@ struct usb_device *open_vid_pid(uint16_t vid, uint16_t pid)
 	}
 	if (dev == NULL)
 	{
-		printf("device %04x:%04x not found\n", VID, PID);
+		fprintf(stderr,"device %04x:%04x not found\n", VID, PID);
 		return NULL;
 	}
 
@@ -155,15 +155,15 @@ char setup64[64] = {
 	0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00
 };
 
-void print_buffer( char *buf, int len )
+void print_buffer( char *buf, int len, FILE *file )
 {
 	for (int i = 0; i < len; i++)
 	{
 		if (i % 8 == 0)
-			printf("\n\t");
-		printf(" %02x", buf[i] & 0xFF);
+			fprintf(file,"\n\t");
+		fprintf(file," %02x", buf[i] & 0xFF);
 	}
-	printf("\n");
+	fprintf(file,"\n");
 }
 
 int main (int argc, char **argv)
@@ -184,7 +184,7 @@ int main (int argc, char **argv)
 	dev_hdl = usb_open(dev);
 	if (dev_hdl == NULL)
 	{
-		printf("usb_open failed: %s\n", usb_strerror());
+		fprintf(stderr,"usb_open failed: %s\n", usb_strerror());
 		return -1;
 	}
 
@@ -196,7 +196,7 @@ int main (int argc, char **argv)
 	ret = usb_reset(dev_hdl);
 	if (ret < 0)
 	{
-		printf("usb_reset failed with status %i: %s\n", ret, usb_strerror());
+		fprintf(stderr,"usb_reset failed with status %i: %s\n", ret, usb_strerror());
 		return ret;
 	}
 	
@@ -211,7 +211,7 @@ int main (int argc, char **argv)
 	);
 	if (ret < 0)
 	{
-		printf("usb_get_descriptor 9 failed with status %i: %s\n", ret, usb_strerror());
+		fprintf(stderr,"usb_get_descriptor 9 failed with status %i: %s\n", ret, usb_strerror());
 		return ret;
 	}
 
@@ -224,7 +224,7 @@ int main (int argc, char **argv)
 	);
 	if (ret < 0)
 	{
-		printf("usb_get_descriptor 32 failed with status %i: %s\n", ret, usb_strerror());
+		fprintf(stderr,"usb_get_descriptor 32 failed with status %i: %s\n", ret, usb_strerror());
 		return ret;
 	}
 #endif
@@ -232,14 +232,14 @@ int main (int argc, char **argv)
 	ret = usb_set_configuration(dev_hdl, 1); // bConfigurationValue=1, iConfiguration=0
 	if (ret < 0)
 	{
-		printf("usb_set_configuration failed with status %i: %s\n", ret, usb_strerror());
+		fprintf(stderr,"usb_set_configuration failed with status %i: %s\n", ret, usb_strerror());
 		return ret;
 	}
 	
 	ret = usb_claim_interface(dev_hdl, 0); // bInterfaceNumber=0, bAlternateSetting=0, bNumEndpoints=2
 	if (ret < 0)
 	{
-		printf("usb_claim_interface failed with status %i: %s\n", ret, usb_strerror());
+		fprintf(stderr,"usb_claim_interface failed with status %i: %s\n", ret, usb_strerror());
 		return ret;
 	}
 
@@ -257,7 +257,7 @@ int main (int argc, char **argv)
 	);
 	if (ret < 0)
 	{
-		printf("usb_control_msg request 0 failed with status %i: %s\n", ret, usb_strerror());
+		fprintf(stderr,"usb_control_msg request 0 failed with status %i: %s\n", ret, usb_strerror());
 		// return -1;
 	}
 #endif
@@ -273,7 +273,7 @@ int main (int argc, char **argv)
 	);
 	if (ret < 0)
 	{
-		printf("usb_control_msg request 2 failed with http://beelogger.de/?page_id=50status %i: %s\n", ret, usb_strerror());
+		fprintf(stderr,"usb_control_msg request 2 failed with status %i: %s\n", ret, usb_strerror());
 		// return -1;	// yes, this might fail, ignore!
 	}
 
@@ -291,7 +291,7 @@ int main (int argc, char **argv)
 	);
 	if (ret < 0)
 	{
-		printf("usb_bulk_write send setup failed with status %i: %s\n", ret, usb_strerror());
+		fprintf(stderr,"usb_bulk_write send setup 0x0e failed with status %i: %s\n", ret, usb_strerror());
 		return ret;
 	}
 
@@ -305,7 +305,7 @@ int main (int argc, char **argv)
 	);
 	if (ret < 0)
 	{
-		printf("usb_bulk_write send setup failed with status %i: %s\n", ret, usb_strerror());
+		fprintf(stderr,"usb_bulk_write send setup (64 bytes) failed with status %i: %s\n", ret, usb_strerror());
 		return ret;
 	}
 
@@ -319,14 +319,14 @@ int main (int argc, char **argv)
 	);
 	if (ret < 0)
 	{
-		printf("usb_bulk_read failed with status %i: %s\n", ret, usb_strerror());
+		fprintf(stderr,"usb_bulk_read failed with status %i: %s\n", ret, usb_strerror());
 		return ret;
 	}
 	if( (ret==1) && (buf[0]==(char)0xFF) ) {
 		// ack
 	} else {
-		printf("usb_bulk_read: got %i bytes unexpected response\n", ret );
-		print_buffer(buf,ret);
+		fprintf(stderr,"usb_bulk_read: got %i bytes unexpected response\n", ret );
+		print_buffer(buf,ret,stderr);
 	}
 
 	sleep(5);
@@ -335,7 +335,7 @@ int main (int argc, char **argv)
 	// locale support often not installed :-(
 	char *rc = setlocale (LC_ALL, "de_DE" );
 	if(rc==NULL) {
-		printf("failed to set locale\n");
+		fprintf(stderr,"failed to set locale\n");
 	}
 #endif
 
@@ -357,7 +357,7 @@ int main (int argc, char **argv)
 		);
 		if (ret < 0)
 		{
-			printf("usb_bulk_write failed with status %i: %s\n", ret, usb_strerror());
+			fprintf(stderr,"usb_bulk_write failed with status %i: %s\n", ret, usb_strerror());
 			return ret;
 		}
 
@@ -370,7 +370,7 @@ int main (int argc, char **argv)
 		);
 		if (ret < 0)
 		{
-			printf("usb_bulk_read failed with status %i: %s\n", ret, usb_strerror());
+			fprintf(stderr,"usb_bulk_read failed with status %i: %s\n", ret, usb_strerror());
 			return ret;
 		}
 
@@ -382,8 +382,8 @@ int main (int argc, char **argv)
 			strftime(timebuf,sizeof timebuf,"%Y-%m-%d %H:%M:%S", loctime );
 			printf("%10ld; %s; %3d,%d\n", curtime, timebuf, x/10, x%10 );
 		} else {
-			printf("usb_bulk_read unexpectedly transferred %i bytes", ret);
-			print_buffer(buf,ret);
+			fprintf(stderr,"usb_bulk_read unexpectedly transferred %i bytes", ret);
+			print_buffer(buf,ret,stderr);
 
 		}
 	}
