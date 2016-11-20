@@ -6,7 +6,7 @@
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <fcntl.h>
-
+#include <syslog.h>
 #include <usb.h>
 #include <time.h>
 #include <locale.h>
@@ -31,14 +31,14 @@ struct usb_device *open_vid_pid(uint16_t vid, uint16_t pid)
 	ret = usb_find_busses();
 	if (ret < 0)
 	{
-		fprintf(stderr,"usb_find_busses failed with status %i: %s\n", ret, usb_strerror());
+		syslog(LOG_ERR, "usb_find_busses failed with status %i: %s\n", ret, usb_strerror());
 		return NULL;
 	}
 
 	ret = usb_find_devices();
 	if (ret < 0)
 	{
-		fprintf(stderr,"usb_find_devices failed with status %i: %s\n", ret, usb_strerror());
+		syslog(LOG_ERR, "usb_find_devices failed with status %i: %s\n", ret, usb_strerror());
 		return NULL;
 	}
 
@@ -62,7 +62,7 @@ struct usb_device *open_vid_pid(uint16_t vid, uint16_t pid)
 	}
 	if (dev == NULL)
 	{
-		fprintf(stderr,"device %04x:%04x not found\n", VID, PID);
+		syslog(LOG_ERR, "device %04x:%04x not found\n", VID, PID);
 		return NULL;
 	}
 
@@ -196,7 +196,11 @@ int main (int argc, char **argv)
 	int last_min = -1;	// when min changes, a summary file entry is generated
 	int log_fd = -1;	// log file descriptor
 
+	openlog(NULL,0,0);
+
 again:
+	syslog(LOG_NOTICE, "started" );
+
 	//usb_set_debug(255);
 	usb_init();
 
@@ -208,7 +212,7 @@ again:
 	dev_hdl = usb_open(dev);
 	if (dev_hdl == NULL)
 	{
-		fprintf(stderr,"usb_open failed: %s\n", usb_strerror());
+		syslog(LOG_ERR, "usb_open failed: %s\n", usb_strerror());
 		return -1;
 	}
 
@@ -220,7 +224,7 @@ again:
 	ret = usb_reset(dev_hdl);
 	if (ret < 0)
 	{
-		fprintf(stderr,"usb_reset failed with status %i: %s\n", ret, usb_strerror());
+		syslog(LOG_ERR, "usb_reset failed with status %i: %s\n", ret, usb_strerror());
 		return ret;
 	}
 	
@@ -235,7 +239,7 @@ again:
 	);
 	if (ret < 0)
 	{
-		fprintf(stderr,"usb_get_descriptor 9 failed with status %i: %s\n", ret, usb_strerror());
+		syslog(LOG_ERR, "usb_get_descriptor 9 failed with status %i: %s\n", ret, usb_strerror());
 		return ret;
 	}
 
@@ -248,7 +252,7 @@ again:
 	);
 	if (ret < 0)
 	{
-		fprintf(stderr,"usb_get_descriptor 32 failed with status %i: %s\n", ret, usb_strerror());
+		syslog(LOG_ERR, "usb_get_descriptor 32 failed with status %i: %s\n", ret, usb_strerror());
 		return ret;
 	}
 #endif
@@ -256,14 +260,14 @@ again:
 	ret = usb_set_configuration(dev_hdl, 1); // bConfigurationValue=1, iConfiguration=0
 	if (ret < 0)
 	{
-		fprintf(stderr,"usb_set_configuration failed with status %i: %s\n", ret, usb_strerror());
+		syslog(LOG_ERR, "usb_set_configuration failed with status %i: %s\n", ret, usb_strerror());
 		return ret;
 	}
 	
 	ret = usb_claim_interface(dev_hdl, 0); // bInterfaceNumber=0, bAlternateSetting=0, bNumEndpoints=2
 	if (ret < 0)
 	{
-		fprintf(stderr,"usb_claim_interface failed with status %i: %s\n", ret, usb_strerror());
+		syslog(LOG_ERR, "usb_claim_interface failed with status %i: %s\n", ret, usb_strerror());
 		return ret;
 	}
 
@@ -281,7 +285,7 @@ again:
 	);
 	if (ret < 0)
 	{
-		fprintf(stderr,"usb_control_msg request 0 failed with status %i: %s\n", ret, usb_strerror());
+		syslog(LOG_ERR, "usb_control_msg request 0 failed with status %i: %s\n", ret, usb_strerror());
 		// return -1;
 	}
 #endif
@@ -297,7 +301,7 @@ again:
 	);
 	if (ret < 0)
 	{
-		fprintf(stderr,"usb_control_msg request 2 failed with status %i: %s\n", ret, usb_strerror());
+		syslog(LOG_ERR, "usb_control_msg request 2 failed with status %i: %s\n", ret, usb_strerror());
 		// return -1;	// yes, this might fail, ignore!
 	}
 
@@ -315,7 +319,7 @@ again:
 	);
 	if (ret < 0)
 	{
-		fprintf(stderr,"usb_bulk_write send setup 0x0e failed with status %i: %s\n", ret, usb_strerror());
+		syslog(LOG_ERR, "usb_bulk_write send setup 0x0e failed with status %i: %s\n", ret, usb_strerror());
 		return ret;
 	}
 
@@ -329,7 +333,7 @@ again:
 	);
 	if (ret < 0)
 	{
-		fprintf(stderr,"usb_bulk_write send setup (64 bytes) failed with status %i: %s\n", ret, usb_strerror());
+		syslog(LOG_ERR, "usb_bulk_write send setup (64 bytes) failed with status %i: %s\n", ret, usb_strerror());
 		return ret;
 	}
 
@@ -343,13 +347,13 @@ again:
 	);
 	if (ret < 0)
 	{
-		fprintf(stderr,"usb_bulk_read failed with status %i: %s\n", ret, usb_strerror());
+		syslog(LOG_ERR, "usb_bulk_read failed with status %i: %s\n", ret, usb_strerror());
 		return ret;
 	}
 	if( (ret==1) && (buf[0]==(char)0xFF) ) {
 		// ack
 	} else {
-		fprintf(stderr,"usb_bulk_read: got %i bytes unexpected response\n", ret );
+		syslog(LOG_ERR, "usb_bulk_read: got %i bytes unexpected response\n", ret );
 		print_buffer(buf,ret,stderr);
 	}
 
@@ -359,7 +363,7 @@ again:
 	// locale support often not installed :-(
 	char *rc = setlocale (LC_ALL, "de_DE" );
 	if(rc==NULL) {
-		fprintf(stderr,"failed to set locale\n");
+		syslog(LOG_ERR, "failed to set locale\n");
 	}
 #endif
 
@@ -381,7 +385,7 @@ again:
 		);
 		if (ret < 0)
 		{
-			fprintf(stderr,"usb_bulk_write failed with status %i: %s\n", ret, usb_strerror());
+			syslog(LOG_ERR, "usb_bulk_write failed with status %i: %s\n", ret, usb_strerror());
 			return ret;
 		}
 
@@ -394,7 +398,7 @@ again:
 		);
 		if (ret < 0)
 		{
-			fprintf(stderr,"usb_bulk_read failed with status %i: %s\n", ret, usb_strerror());
+			syslog(LOG_ERR, "usb_bulk_read failed with status %i: %s\n", ret, usb_strerror());
 			return ret;
 		}
 
@@ -403,7 +407,7 @@ again:
 
 			if(x == 0) {
 				// yes, I saw that when sleep(1) was used (too fast?)
-				fprintf(stderr,"got result 0.0 from measurement --> reset USB\n");
+				syslog(LOG_ERR, "got result 0.0 from measurement --> reset USB\n");
 				usb_close(dev_hdl);
 				goto again;
 			}
@@ -418,7 +422,7 @@ again:
 				strftime(filename,sizeof filename,"/www/pages/logs/%Y-%m-%d.csv", loctime );
 				log_fd = open(filename,O_WRONLY|O_CREAT|O_APPEND|O_SYNC);
 				if( log_fd < 0 ) {
-					fprintf(stderr,"failed to open logfile %s, error %d\n", filename, log_fd );
+					syslog(LOG_ERR, "failed to open logfile %s, error %d\n", filename, log_fd );
 				}
 			}		
 			// in addition, we could dump cpu temp: /sys/class/thermal/thermal_zone0/temp
@@ -428,10 +432,10 @@ again:
 			int count = snprintf(logline, sizeof logline, "%s; %3d.%d\n", timebuf, x/10, x%10 );
 			int rc = write( log_fd, logline, count );
 			if( rc != count ) {
-				fprintf(stderr,"failed to write line %s to logfile, error %d\n", logline, log_fd );
+				syslog(LOG_ERR, "failed to write line %s to logfile, error %d\n", logline, log_fd );
 			}
 		} else {
-			fprintf(stderr,"usb_bulk_read unexpectedly transferred %i bytes", ret);
+			syslog(LOG_ERR, "usb_bulk_read unexpectedly transferred %i bytes", ret);
 			print_buffer(buf,ret,stderr);
 
 		}
@@ -442,6 +446,9 @@ again:
 	
 	if(log_fd > 0 )
 		close(log_fd);
+
+	syslog(LOG_NOTICE, "ended");
+	closelog();
 
 	return 0;
 }
