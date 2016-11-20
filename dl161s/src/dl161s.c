@@ -3,6 +3,10 @@
 #include <stdint.h>
 #include <string.h>
 #include <unistd.h>
+#include <sys/types.h>
+#include <sys/stat.h>
+#include <fcntl.h>
+
 #include <usb.h>
 #include <time.h>
 #include <locale.h>
@@ -147,9 +151,24 @@ int print_device(struct usb_device *dev, struct usb_dev_handle *udev)
     return 0;
 }
 
-// no idea about struct, but this request one live data per second
+// see http://www.produktinfo.conrad.com/datenblaetter/100000-124999/100032-da-01-en-Schnittstelle_DL160S_SCHALLPDATENLOGGER.pdf
+// request one live measurment dBA fast peak per second
 char setup64[64] = {
-	0x0a, 0x5d, 0x01, 0x82, 0x1e, 0x10, 0x0b, 0x06, 0x10, 0x08, 0x0b, 0x01, 0xfb, 0x80, 0x00, 0x00,
+	0x0a, // green LED blink interval: 10 seconds
+	0x5d, // bits (0/1): 7: auto/manual 6: realtime/store 5: check? 4: normal/peak 	3: dBC/dBA 2: slow/fast 1+0: S(01), M(10), H(11) ??? 
+	0x01, // samplerate: 1 second
+	0x3c, // alarm LED hi level dB (set to 60 dB to give some visual feedback)
+	0x1e, // alarm LED ho level dB
+	0x10, // year (2-digit): 2016
+	0x0b, // month: 11
+	0x06, // day: 6
+	0x10, // hour: 16
+	0x08, // minute: 8
+	0x0b, // seconds: 11
+	0x01, // #samples (3U8) MSB 
+	0xfb, // #samples (3U8) ...
+	0x80, // #samples (3U8) LSB 0x01fb80 = 129920 samples
+	0x00, 0x00,
 	0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x8c, 0x39, 0xbb, 0x78, 0x03, 0x00, 0x00, 0x00,
 	0x0e, 0x40, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
 	0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00
@@ -173,6 +192,11 @@ int main (int argc, char **argv)
 	struct usb_device *dev;
 	struct usb_dev_handle *dev_hdl = NULL;
 
+	int last_day = -1;	// when day changes, a new file will be used
+	int last_min = -1;	// when min changes, a summary file entry is generated
+	int log_fd = -1;	// log file descriptor
+
+again:
 	//usb_set_debug(255);
 	usb_init();
 
@@ -341,7 +365,7 @@ int main (int argc, char **argv)
 
 	while(1) {
 
-		sleep(1);
+		usleep(1100000);
 
 		// request measurement
 		buf[0] = 0xFF;
@@ -376,12 +400,36 @@ int main (int argc, char **argv)
 
 		if(ret==2) {
 			int x = 256*(uint8_t)buf[1] + (uint8_t)buf[0]; // measurement value in 0.1 dbA
+
+			if(x == 0) {
+				// yes, I saw that when sleep(1) was used (too fast?)
+				fprintf(stderr,"got result 0.0 from measurement --> reset USB\n");
+				usb_close(dev_hdl);
+				goto again;
+			}
+			
 			time_t curtime = time(NULL);
 			struct tm *loctime = localtime(&curtime);
+
+			if(last_day != loctime->tm_mday ) {
+				if(log_fd > 0 )
+					close(log_fd);
+				char filename[80];
+				strftime(filename,sizeof filename,"/www/pages/logs/%Y-%m-%d.csv", loctime );
+				log_fd = open(filename,O_WRONLY|O_CREAT|O_APPEND|O_SYNC);
+				if( log_fd < 0 ) {
+					fprintf(stderr,"failed to open logfile %s, error %d\n", filename, log_fd );
+				}
+			}		
+			// in addition, we could dump cpu temp: /sys/class/thermal/thermal_zone0/temp
 			char timebuf[80];
+			char logline[80];
 			strftime(timebuf,sizeof timebuf,"%Y-%m-%d %H:%M:%S", loctime );
-			printf("%s; %3d.%d\n", timebuf, x/10, x%10 );
-			fflush(stdout);
+			int count = snprintf(logline, sizeof logline, "%s; %3d.%d\n", timebuf, x/10, x%10 );
+			int rc = write( log_fd, logline, count );
+			if( rc != count ) {
+				fprintf(stderr,"failed to write line %s to logfile, error %d\n", logline, log_fd );
+			}
 		} else {
 			fprintf(stderr,"usb_bulk_read unexpectedly transferred %i bytes", ret);
 			print_buffer(buf,ret,stderr);
@@ -392,6 +440,9 @@ int main (int argc, char **argv)
 	if (dev_hdl != NULL)
 		usb_close(dev_hdl);
 	
+	if(log_fd > 0 )
+		close(log_fd);
+
 	return 0;
 }
 
