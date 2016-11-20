@@ -380,7 +380,8 @@ int main (int argc, char **argv)
 			struct tm *loctime = localtime(&curtime);
 			char timebuf[80];
 			strftime(timebuf,sizeof timebuf,"%Y-%m-%d %H:%M:%S", loctime );
-			printf("%10ld; %s; %3d,%d\n", curtime, timebuf, x/10, x%10 );
+			printf("%s; %3d.%d\n", timebuf, x/10, x%10 );
+			fflush(stdout);
 		} else {
 			fprintf(stderr,"usb_bulk_read unexpectedly transferred %i bytes", ret);
 			print_buffer(buf,ret,stderr);
