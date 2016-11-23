@@ -193,9 +193,7 @@ int main (int argc, char **argv)
 	struct usb_dev_handle *dev_hdl = NULL;
 
 	int last_day = -1;	// when day changes, a new file will be used
-	int last_min = -1;	// when min changes, a summary file entry is generated
 	int data_fd = -1;	// measurment data file descriptor
-	int coarse_data_fd = -1;
 	openlog(NULL,0,0);
 
 again:
