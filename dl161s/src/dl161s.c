@@ -20,6 +20,8 @@ int EP_OUT = 0;
 #define BUFSIZE 64 /* wMaxPacketSize = 1x 64 bytes */
 #define TIMEOUT 5000
 
+#define INVALID_CALIBRATION_VALUE (127)
+
 struct usb_device *open_vid_pid(uint16_t vid, uint16_t pid)
 {
 	int ret;
@@ -154,11 +156,17 @@ int print_device(struct usb_device *dev, struct usb_dev_handle *udev)
 // see http://www.produktinfo.conrad.com/datenblaetter/100000-124999/100032-da-01-en-Schnittstelle_DL160S_SCHALLPDATENLOGGER.pdf
 // request one live measurment dBA fast peak per second
 char setup64[64] = {
-	0x0a, // green LED blink interval: 10 seconds
-	0x5d, // bits (0/1): 7: auto/manual 6: realtime/store 5: check? 4: normal/peak 	3: dBC/dBA 2: slow/fast 1+0: S(01), M(10), H(11) ??? 
-	0x01, // samplerate: 1 second
+	0x0a, 	// green LED blink interval: 10 seconds
+	(0<<7) |	// 0/1: auto/manual
+	(1<<6) |	// 0/1: realtime/store
+	(0<<5) |	// 0/1: check?
+	(1<<4) |	// 0/1: normal/peak
+	(1<<3) |	// 0/1: dBC/dBA (frequency weighting)
+	(0<<2) |	// 0/1: slow/fast (time weighting)
+	(1<<0) ,	// 0/1/2/3: n.a. / sample rate in seconds / sample rate in minutes / sample rate in hours
+	0x01, // sample rate: 1
 	0x3c, // alarm LED hi level dB (set to 60 dB to give some visual feedback)
-	0x1e, // alarm LED ho level dB
+	0x1e, // alarm LED lo level dB
 	0x10, // year (2-digit): 2016
 	0x0b, // month: 11
 	0x06, // day: 6
@@ -185,6 +193,50 @@ void print_buffer( char *buf, int len, FILE *file )
 	fprintf(file,"\n");
 }
 
+// calibration value is a signed int in 0.1 dB steps, 0 is 0.0 dB, range according to manual: +/- 12.0 dB
+int send_calibration(struct usb_dev_handle *dev_hdl, int8_t value)
+{
+	char buf[BUFSIZE];
+	int ret;
+
+	syslog(LOG_NOTICE, "send_calibration value %i\n", value );
+	// send calibration
+	buf[0] = 0x0C;
+	buf[1] = value;
+	buf[2] = 0x00;
+
+	ret = usb_bulk_write(
+		dev_hdl,
+		EP_OUT,
+		buf,
+		3,
+		TIMEOUT
+	);
+	if (ret < 0)
+	{
+		syslog(LOG_ERR, "usb_bulk_write failed with status %i: %s\n", ret, usb_strerror());
+		return ret;
+	}
+
+	ret = usb_bulk_read(
+		dev_hdl,
+		EP_IN,
+		buf,
+		64,
+		TIMEOUT
+	);
+	if (ret < 0)
+	{
+		syslog(LOG_ERR, "usb_bulk_read failed with status %i: %s\n", ret, usb_strerror());
+		return ret;
+	}
+
+	//TODO: interpreting response
+	syslog(LOG_INFO, "calibration response: %i bytes: %i ...\n", ret, (int8_t)buf[0] );
+
+	return 0;
+}
+
 int main (int argc, char **argv)
 {	
 	char buf[BUFSIZE];
@@ -194,7 +246,33 @@ int main (int argc, char **argv)
 
 	int last_day = -1;	// when day changes, a new file will be used
 	int data_fd = -1;	// measurment data file descriptor
+
+	int c;
+	int8_t calibration_value = INVALID_CALIBRATION_VALUE; 
+
 	openlog(NULL,0,0);
+
+	while ((c = getopt (argc, argv, "c:")) != -1) {
+		switch (c) {
+			case 'c':
+				calibration_value = (int8_t)atoi(optarg);
+				if( (calibration_value < -125) || (calibration_value > +125) ) {
+					fprintf(stderr,"calibration value %i out of range, abort.\n", calibration_value);
+					return -1;
+				}
+				break;
+			case '?':
+				fprintf(stderr,"unknown option, abort.\n");
+				return -1;
+			default:
+				abort();
+		}
+	}
+	if( optind < argc ) {
+		// trailing non-option arguments
+		fprintf(stderr,"trailing non-option arguments, abort.\n");
+		return -1;
+	}
 
 again:
 	syslog(LOG_NOTICE, "started" );
@@ -365,6 +443,10 @@ again:
 	}
 #endif
 
+	if(calibration_value != INVALID_CALIBRATION_VALUE) {
+		send_calibration(dev_hdl,calibration_value);
+	}
+
 	while(1) {
 
 		usleep(1100000);
@@ -423,7 +505,6 @@ again:
 					syslog(LOG_ERR, "failed to open logfile %s, error %d\n", filename, data_fd );
 				}
 			}		
-			// in addition, we could dump cpu temp: /sys/class/thermal/thermal_zone0/temp
 			char timebuf[80];
 			char logline[80];
 			strftime(timebuf,sizeof timebuf,"%Y-%m-%d %H:%M:%S", loctime );
