@@ -9,10 +9,10 @@
       <div id="myDropdown" class="dropdown-content">
         <select id="mySelect">
 	  <?php
-		$dp = opendir("/www/pages/logs");
-		while (false !== ($filename = readdir($dp))) {
-		  if( ($filename != "..") && ($filename != ".") ) {
-			echo "<option> $filename </option>\n";
+		$files = scandir ( "/www/pages/logs", SCANDIR_SORT_DESCENDING );
+		foreach ($files as $file) {
+		  if( ($file != "..") && ($file != ".") ) {
+			echo "<option>$file</option>\n";
 		  }
 		}
 	  ?>
