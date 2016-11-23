@@ -194,8 +194,8 @@ int main (int argc, char **argv)
 
 	int last_day = -1;	// when day changes, a new file will be used
 	int last_min = -1;	// when min changes, a summary file entry is generated
-	int log_fd = -1;	// log file descriptor
-
+	int data_fd = -1;	// measurment data file descriptor
+	int coarse_data_fd = -1;
 	openlog(NULL,0,0);
 
 again:
@@ -416,13 +416,13 @@ again:
 			struct tm *loctime = localtime(&curtime);
 
 			if(last_day != loctime->tm_mday ) {
-				if(log_fd > 0 )
-					close(log_fd);
+				if(data_fd > 0 )
+					close(data_fd);
 				char filename[80];
 				strftime(filename,sizeof filename,"/www/pages/logs/%Y-%m-%d.csv", loctime );
-				log_fd = open(filename,O_WRONLY|O_CREAT|O_APPEND|O_SYNC);
-				if( log_fd < 0 ) {
-					syslog(LOG_ERR, "failed to open logfile %s, error %d\n", filename, log_fd );
+				data_fd = open(filename,O_WRONLY|O_CREAT|O_APPEND|O_SYNC);
+				if( data_fd < 0 ) {
+					syslog(LOG_ERR, "failed to open logfile %s, error %d\n", filename, data_fd );
 				}
 			}		
 			// in addition, we could dump cpu temp: /sys/class/thermal/thermal_zone0/temp
@@ -430,9 +430,9 @@ again:
 			char logline[80];
 			strftime(timebuf,sizeof timebuf,"%Y-%m-%d %H:%M:%S", loctime );
 			int count = snprintf(logline, sizeof logline, "%s; %3d.%d\n", timebuf, x/10, x%10 );
-			int rc = write( log_fd, logline, count );
+			int rc = write( data_fd, logline, count );
 			if( rc != count ) {
-				syslog(LOG_ERR, "failed to write line %s to logfile, error %d\n", logline, log_fd );
+				syslog(LOG_ERR, "failed to write line %s to logfile, error %d\n", logline, data_fd );
 			}
 		} else {
 			syslog(LOG_ERR, "usb_bulk_read unexpectedly transferred %i bytes", ret);
@@ -444,8 +444,8 @@ again:
 	if (dev_hdl != NULL)
 		usb_close(dev_hdl);
 	
-	if(log_fd > 0 )
-		close(log_fd);
+	if(data_fd > 0 )
+		close(data_fd);
 
 	syslog(LOG_NOTICE, "ended");
 	closelog();
