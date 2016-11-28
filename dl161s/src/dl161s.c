@@ -194,12 +194,15 @@ void print_buffer( char *buf, int len, FILE *file )
 }
 
 // calibration value is a signed int in 0.1 dB steps, 0 is 0.0 dB, range according to manual: +/- 12.0 dB
+// calibration value is a relative value which is added to the current calibration value stored in the device
+// the accumulated value is returned from the device
+// i.e. sending a 0.0 retrieves the stored value without altering calibration
 int send_calibration(struct usb_dev_handle *dev_hdl, int8_t value)
 {
 	char buf[BUFSIZE];
 	int ret;
 
-	syslog(LOG_NOTICE, "send_calibration value %i\n", value );
+	syslog(LOG_DEBUG, "send_calibration(%i)\n", value );
 	// send calibration
 	buf[0] = 0x0C;
 	buf[1] = value;
@@ -215,7 +218,7 @@ int send_calibration(struct usb_dev_handle *dev_hdl, int8_t value)
 	if (ret < 0)
 	{
 		syslog(LOG_ERR, "usb_bulk_write failed with status %i: %s\n", ret, usb_strerror());
-		return ret;
+		return INVALID_CALIBRATION_VALUE;
 	}
 
 	ret = usb_bulk_read(
@@ -228,13 +231,20 @@ int send_calibration(struct usb_dev_handle *dev_hdl, int8_t value)
 	if (ret < 0)
 	{
 		syslog(LOG_ERR, "usb_bulk_read failed with status %i: %s\n", ret, usb_strerror());
-		return ret;
+		return INVALID_CALIBRATION_VALUE;
 	}
 
-	//TODO: interpreting response
-	syslog(LOG_INFO, "calibration response: %i bytes: %i ...\n", ret, (int8_t)buf[0] );
+	// response is the accumulated absolute calibration value
+	if(ret==1) {
+		int accumulated_value = (int8_t)buf[0];
+		syslog(LOG_DEBUG, "send_calibration returns: %i\n", accumulated_value );
+		return accumulated_value;
+	}
+	else {
+		syslog(LOG_ERR, "unexpected calibration response: %i bytes: %i ...\n", ret, (int8_t)buf[0] );
+	}
 
-	return 0;
+	return INVALID_CALIBRATION_VALUE;
 }
 
 int main (int argc, char **argv)
@@ -248,14 +258,14 @@ int main (int argc, char **argv)
 	int data_fd = -1;	// measurment data file descriptor
 
 	int c;
-	int8_t calibration_value = INVALID_CALIBRATION_VALUE; 
+	int calibration_value = INVALID_CALIBRATION_VALUE;
 
 	openlog(NULL,0,0);
 
 	while ((c = getopt (argc, argv, "c:")) != -1) {
 		switch (c) {
 			case 'c':
-				calibration_value = (int8_t)atoi(optarg);
+				calibration_value = atoi(optarg);
 				if( (calibration_value < -125) || (calibration_value > +125) ) {
 					fprintf(stderr,"calibration value %i out of range, abort.\n", calibration_value);
 					return -1;
@@ -443,8 +453,12 @@ again:
 	}
 #endif
 
+	int stored_calibration_value = send_calibration(dev_hdl,0);
+	syslog(LOG_NOTICE, "found stored calibration value: %i*0.1 dB\n", stored_calibration_value);
+
 	if(calibration_value != INVALID_CALIBRATION_VALUE) {
-		send_calibration(dev_hdl,calibration_value);
+		int new_stored_calibration_value = send_calibration(dev_hdl,calibration_value);
+		syslog(LOG_NOTICE, "new stored calibration value: %i*0.1 dB\n", new_stored_calibration_value );
 	}
 
 	while(1) {
