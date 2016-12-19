@@ -266,6 +266,7 @@ int main (int argc, char **argv)
 
 	while ((c = getopt (argc, argv, "c:")) != -1) {
 		switch (c) {
+#if 0
 			case 'c':
 				calibration_value = atoi(optarg);
 				if( (calibration_value < -125) || (calibration_value > +125) ) {
@@ -273,6 +274,7 @@ int main (int argc, char **argv)
 					return -1;
 				}
 				break;
+#endif
 			case '?':
 				fprintf(stderr,"unknown option, abort.\n");
 				return -1;
