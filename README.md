@@ -14,7 +14,9 @@ https://sigrok.org/wiki/Voltcraft_DL-160S
 written with libusb 0.1 API, therefore
 * libusb-1_0-devel
 * libusb-compat-devel
-need to be installed
+need to be installed, e.g.
+
+    sudo apt-get install libusb-dev
 
 # how to build
 

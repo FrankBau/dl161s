@@ -184,7 +184,9 @@ char setup64[64] = {
 
 void print_buffer( char *buf, int len, FILE *file )
 {
-	for (int i = 0; i < len; i++)
+	int i;
+
+	for (i = 0; i < len; i++)
 	{
 		if (i % 8 == 0)
 			fprintf(file,"\n\t");
@@ -292,6 +294,7 @@ again:
 
 	dev = open_vid_pid(VID,PID);
 	if(dev == NULL) {
+		syslog(LOG_ERR, "open_vid_pid failed, exit\n");
 		return -1;
 	}
 
@@ -514,7 +517,7 @@ again:
 					close(data_fd);
 				char filename[80];
 				strftime(filename,sizeof filename,"/www/pages/logs/%Y-%m-%d.csv", loctime );
-				data_fd = open(filename,O_WRONLY|O_CREAT|O_APPEND|O_SYNC);
+				data_fd = open(filename,O_WRONLY|O_CREAT|O_APPEND,0644);
 				if( data_fd < 0 ) {
 					syslog(LOG_ERR, "failed to open logfile %s, error %d\n", filename, data_fd );
 				}
