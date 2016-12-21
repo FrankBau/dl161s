@@ -1,4 +1,5 @@
 #include <stdio.h>
+#include <errno.h>
 #include <stdlib.h>
 #include <stdint.h>
 #include <string.h>
@@ -45,7 +46,7 @@ struct usb_device *open_vid_pid(uint16_t vid, uint16_t pid)
 	}
 
 	busses = usb_get_busses();
-	
+
 	// find dev
 	for (bus_cur = busses; bus_cur != NULL; bus_cur = bus_cur->next)
 	{
@@ -250,14 +251,14 @@ int send_calibration(struct usb_dev_handle *dev_hdl, int8_t value)
 }
 
 int main (int argc, char **argv)
-{	
+{
 	char buf[BUFSIZE];
 	int ret;
 	struct usb_device *dev;
 	struct usb_dev_handle *dev_hdl = NULL;
 
 	int last_day = -1;	// when day changes, a new file will be used
-	int data_fd = -1;	// measurment data file descriptor
+	FILE *data_file = NULL;	// measurment data file stream
 
 	int c;
 	int calibration_value = INVALID_CALIBRATION_VALUE;
@@ -308,17 +309,16 @@ again:
 	}
 
 	//print_device(dev, dev_hdl);
-	
+
 	EP_OUT = dev->config[0].interface[0].altsetting[0].endpoint[0].bEndpointAddress;
 	EP_IN = dev->config[0].interface[0].altsetting[0].endpoint[1].bEndpointAddress;
-	
+
 	ret = usb_reset(dev_hdl);
 	if (ret < 0)
 	{
 		syslog(LOG_ERR, "usb_reset failed with status %i: %s\n", ret, usb_strerror());
 		return ret;
 	}
-	
 
 #if 0
 	ret = usb_get_descriptor(
@@ -354,7 +354,7 @@ again:
 		syslog(LOG_ERR, "usb_set_configuration failed with status %i: %s\n", ret, usb_strerror());
 		return ret;
 	}
-	
+
 	ret = usb_claim_interface(dev_hdl, 0); // bInterfaceNumber=0, bAlternateSetting=0, bNumEndpoints=2
 	if (ret < 0)
 	{
@@ -400,7 +400,7 @@ again:
 	buf[0] = 0x0E;
 	buf[1] = 0x40;
 	buf[2] = 0x00;
-	
+
 	ret = usb_bulk_write(
 		dev_hdl,
 		EP_OUT,
@@ -474,7 +474,7 @@ again:
 		buf[0] = 0xFF;
 		buf[1] = 0x00;
 		buf[2] = 0x00;
-	
+
 		ret = usb_bulk_write(
 			dev_hdl,
 			EP_OUT,
@@ -510,27 +510,32 @@ again:
 				usb_close(dev_hdl);
 				goto again;
 			}
-			
+
 			time_t curtime = time(NULL);
 			struct tm *loctime = localtime(&curtime);
 
 			if(last_day != loctime->tm_mday ) {
-				if(data_fd > 0 )
-					close(data_fd);
+				if(data_file)
+					fclose(data_file);
 				char filename[80];
 				strftime(filename,sizeof filename,"/www/pages/logs/%Y-%m-%d.csv", loctime );
-				data_fd = open(filename,O_WRONLY|O_CREAT|O_APPEND,0644);
-				if( data_fd < 0 ) {
-					syslog(LOG_ERR, "failed to open logfile %s, error %d\n", filename, data_fd );
+				data_file = fopen(filename,"a");
+				if(data_file==NULL) {
+					syslog(LOG_ERR, "failed to open logfile %s, error %d\n", filename, errno );
+					return -1;
 				}
-			}		
+				last_day = loctime->tm_mday;
+			}
 			char timebuf[80];
 			char logline[80];
 			strftime(timebuf,sizeof timebuf,"%Y-%m-%d %H:%M:%S", loctime );
-			int count = snprintf(logline, sizeof logline, "%s; %3d.%d\n", timebuf, x/10, x%10 );
-			int rc = write( data_fd, logline, count );
+			// each line is padded to 32 chars.
+			// for buffered IO, each buffer (typ. BUFSIZ=4096)
+			// will contain an integral number of lines.
+			int count = snprintf(logline, sizeof logline, "%s;      %3d.%d\n", timebuf, x/10, x%10 );
+			int rc = fwrite( logline, 1, count, data_file );
 			if( rc != count ) {
-				syslog(LOG_ERR, "failed to write line %s to logfile, error %d\n", logline, data_fd );
+				syslog(LOG_ERR, "failed to write line %s to logfile, error %d\n", logline, errno );
 			}
 		} else {
 			syslog(LOG_ERR, "usb_bulk_read unexpectedly transferred %i bytes", ret);
@@ -538,16 +543,15 @@ again:
 
 		}
 	}
-	
+
 	if (dev_hdl != NULL)
 		usb_close(dev_hdl);
-	
-	if(data_fd > 0 )
-		close(data_fd);
+
+	if(data_file!=NULL)
+		fclose(data_file);
 
 	syslog(LOG_NOTICE, "ended");
 	closelog();
 
 	return 0;
 }
-
