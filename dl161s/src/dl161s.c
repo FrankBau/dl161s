@@ -518,7 +518,7 @@ again:
 				if(data_file)
 					fclose(data_file);
 				char filename[80];
-				strftime(filename,sizeof filename,"/www/pages/logs/%Y-%m-%d.csv", loctime );
+				strftime(filename,sizeof filename,"/var/www/html/logs/logs/%Y-%m-%d.csv", loctime );
 				data_file = fopen(filename,"a");
 				if(data_file==NULL) {
 					syslog(LOG_ERR, "failed to open logfile %s, error %d\n", filename, errno );
