@@ -9,7 +9,7 @@
       <div id="myDropdown" class="dropdown-content">
         <select id="mySelect">
 	  <?php
-		$files = scandir ( "/www/pages/logs", SCANDIR_SORT_DESCENDING );
+		$files = scandir ( "./logs", SCANDIR_SORT_DESCENDING );
 		foreach ($files as $file) {
 		  if( ($file != "..") && ($file != ".") ) {
 			echo "<option>$file</option>\n";
@@ -66,7 +66,7 @@
 			dateWindow: [(Ende-10*60*1000), Ende]
 		}
 		);
-	}  
+	}
 
 	function zoom1hr() {
 		chart.updateOptions({dateWindow: null });
@@ -85,4 +85,3 @@
     </script>
   </body>
 </html>
-
