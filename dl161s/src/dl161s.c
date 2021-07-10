@@ -23,6 +23,8 @@ int EP_OUT = 0;
 
 #define INVALID_CALIBRATION_VALUE (127)
 
+int verbose = 0;
+
 struct usb_device *open_vid_pid(uint16_t vid, uint16_t pid)
 {
 	int ret;
@@ -263,9 +265,9 @@ int main (int argc, char **argv)
 	int c;
 	int calibration_value = INVALID_CALIBRATION_VALUE;
 
-	openlog(NULL,0,0);
+	openlog(NULL,LOG_PERROR,0);
 
-	while ((c = getopt (argc, argv, "c:")) != -1) {
+	while ((c = getopt (argc, argv, "c:v")) != -1) {
 		switch (c) {
 #if 0
 			case 'c':
@@ -276,6 +278,9 @@ int main (int argc, char **argv)
 				}
 				break;
 #endif
+			case 'v':
+				verbose = 1;
+				break;
 			case '?':
 				fprintf(stderr,"unknown option, abort.\n");
 				return -1;
@@ -308,7 +313,9 @@ again:
 		return -1;
 	}
 
-	//print_device(dev, dev_hdl);
+	if( verbose ) {
+		print_device(dev, dev_hdl);
+	}
 
 	EP_OUT = dev->config[0].interface[0].altsetting[0].endpoint[0].bEndpointAddress;
 	EP_IN = dev->config[0].interface[0].altsetting[0].endpoint[1].bEndpointAddress;
@@ -524,6 +531,9 @@ again:
 					syslog(LOG_ERR, "failed to open logfile %s, error %d\n", filename, errno );
 					return -1;
 				}
+				if( verbose ) {
+					printf("open log file %s\n", filename );
+				}
 				last_day = loctime->tm_mday;
 			}
 			char timebuf[80];
@@ -533,6 +543,9 @@ again:
 			// for buffered IO, each buffer (typ. BUFSIZ=4096)
 			// will contain an integral number of lines.
 			int count = snprintf(logline, sizeof logline, "%s;      %3d.%d\n", timebuf, x/10, x%10 );
+			if( verbose ) {
+				printf("%s", logline );
+			}
 			int rc = fwrite( logline, 1, count, data_file );
 			if( rc != count ) {
 				syslog(LOG_ERR, "failed to write line %s to logfile, error %d\n", logline, errno );
