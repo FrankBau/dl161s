@@ -26,6 +26,8 @@
    <input type="button" value="Zoom letzte 10 Minuten" onclick="zoom10min()"/>
    <input type="button" value="Zoom all" onclick="unzoom()"/>
    <input type=button onClick="location.href='./logs'" value='Log Files'>   
+   <input type=button onClick="window.open('./linux-dash/app')" value='System Diagnostics'>
+   <input type=button onClick="window.open('https://www.dfld.de/')" value='DFLD'>
 
    <script type="text/javascript">
 	var e = document.getElementById("mySelect");
